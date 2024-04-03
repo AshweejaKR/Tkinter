@@ -1,5 +1,7 @@
 from tkinter import *
 from tkinter import messagebox
+from tkinter import simpledialog
+from tkinter import filedialog
 import os
 import socket
 from PIL import Image, ImageTk
@@ -17,16 +19,46 @@ contactlist = []
 Name = None
 
 user = None
+host = None
+port = None
 image_extension = None
 image_path = None
+profile_label = None
 
 def add_photo():
+    global profile_label
     print("adding photo ...")
+    image_path = filedialog.askopenfilename()
+    image_name = os.path.basename(image_path)
+    image_extension = image_name[image_name.rfind('.')+1:]
+
+    if image_path:
+        user_image = Image.open(image_path)
+        user_image = user_image.resize((150, 140), Image.ANTIALIAS)
+        user_image.save('resized' + image_name)
+        user_image.close()
+
+        image_path = 'resized' + image_name
+        user_image = Image.open(image_path)
+
+        user_image = ImageTk.PhotoImage(user_image)
+        profile_label.image = user_image
+        profile_label.config(image = user_image)
 
 def process_data():
+    global username_entry, host_address_entry, port_number_entry
     print("processing data ...")
 
+    user = username_entry.get()
+    host = host_address_entry.get()
+    port = port_number_entry.get()
+
+def get_userip(title, prompt):
+    pass
+
 def InitScreen(root):
+    global username_entry, host_address_entry, port_number_entry
+    global profile_label
     screen_width, screen_height = root.winfo_screenwidth(), root.winfo_screenheight()
     root.x_co = int((screen_width / 2) - (550 / 2))
     root.y_co = int((screen_height / 2) - (400 / 2)) - 80
@@ -75,9 +107,9 @@ def InitScreen(root):
 
     port_number = Label(first_frame, text = "port number", font = "lucida 12 bold", bg = "grey")
     port_number.place(x = 50, y = 155)
-    username_entry = Entry(first_frame,  font = "lucida 12 bold", width = 10, highlightcolor = "blue", highlightthickness = 1)
-    username_entry.place(x = 195, y = 155)
-    username_entry.focus_set()
+    port_number_entry = Entry(first_frame,  font = "lucida 12 bold", width = 10, highlightcolor = "blue", highlightthickness = 1)
+    port_number_entry.place(x = 195, y = 155)
+    port_number_entry.focus_set()
 
     submit_button = Button(first_frame, text = "Connect", font = "lucida 12 bold", padx = 30, cursor = "hand2", command = process_data, bg = "#16cade", relief = "solid", bd = 2)
     submit_button.place(x = 200, y = 275)

@@ -1,1 +1,45 @@
-hello hi its just a text file.
+import pandas as pd
+import os
+from enum import Enum
+import time
+from logger import *
+from autotick import *
+
+class Mode(Enum):
+    LIVE_TRADE = 1
+    PAPER_TRADE = 2
+    BACKTEST = 3
+    USER_TEST = 4
+
+# def read_config_data():
+#     try:
+#         df1 = pd.read_excel('../trade_settings.xlsx', "SETTING")
+#         df2 = pd.read_excel('../trade_settings.xlsx', "SYMBOLS")
+#     except Exception as err:
+#         template = "An exception of type {0} occurred. error message:{1!r}"
+#         message = template.format(type(err).__name__, err.args)
+#         lg.error("{}".format(message))
+
+def main():
+    print("Hello")
+    start = time.time()
+    print("T0 : {}".format(start))
+
+    exchange = "NSE"
+    # ticker = "INFY-EQ"
+    # ticker = "IEX-EQ"
+    ticker = "SAGILITY-EQ"
+    datestamp = dt.date.today()
+    mode = Mode.LIVE_TRADE
+    obj = autotick(ticker, exchange, mode, datestamp)
+    obj.run_trade()
+
+    del obj
+    print("Done ...")
+    end = time.time()
+    print("T1 : {}".format(end))
+    diff = end - start
+    print("T: {} \n".format(time.strftime('%H:%M:%S', time.gmtime(diff))))
+
+if __name__ == "__main__":
+    main()

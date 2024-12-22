@@ -1,168 +1,96 @@
-from SmartApi import SmartConnect
-from pyotp import TOTP
-import urllib
-
+import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 import datetime as dt
-import time, sys
 
-from config import *
-from utils import *
 
-delay = 1.2
+import gvars
+global intraday_data
+global ltp
+intraday_data = []
 
-def load_instrument_list():
-    filename = "config/instrument_list_file.json"
-    _instrument_list = read_from_json(filename)
+# Fetch historical data using yfinance
+def fetch_historical_data(ticker_, start, end):
+    ticker = ticker_.replace("-EQ", ".NS")
+    try:
+        ticker_data = yf.Ticker(ticker)
 
-    if _instrument_list is None:
-        instrument_url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-        response = urllib.request.urlopen(instrument_url)
-        _instrument_list = json.loads(response.read())
+        historical_data = ticker_data.history(start=start, end=end)
+        return historical_data
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
+        return None
 
-        write_to_json(_instrument_list, filename)
+# Function to fetch intraday data for a specific date
+def fetch_intraday_data(ticker_, date):
+    ticker = ticker_.replace("-EQ", ".NS")
+    try:
+        ticker_data = yf.Ticker(ticker)
+        # Ensure date is a string before processing
+        date = date.strftime("%Y-%m-%d")
 
-    return _instrument_list
+        # Fetch data for the range covering the specific date
+        start_date = (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        intraday_data = ticker_data.history(interval="1m", start=start_date, end=date)
+        return intraday_data
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
+        return None
 
-def token_lookup(ticker, instrument_list, exchange):
-    for instrument in instrument_list:
-        if exchange == "NSE":
-            if instrument["symbol"] == ticker and instrument["exch_seg"] == exchange and instrument["symbol"].split('-')[
-            -1] == "EQ":
-                return instrument["token"]
-        else:
-            if instrument["symbol"] == ticker and instrument["exch_seg"] == exchange:
-                return instrument["token"]
+# Function to fetch the current price of a stock
+def fetch_current_price(ticker_):
+    ticker = ticker_.replace("-EQ", ".NS")
+    try:
+        ticker_data = yf.Ticker(ticker)
+        current_price = ticker_data.info["currentPrice"]
+        return current_price
+    except Exception as e:
+        print(f"Error fetching data for {ticker}: {e}")
+        return None
 
-def symbol_lookup(token, instrument_list, exchange):
-    for instrument in instrument_list:
-        if exchange == "NSE":
-            if instrument["token"] == token and instrument["exch_seg"] == exchange and instrument["symbol"].split('-')[
-            -1] == "EQ":
-                return instrument["symbol"]
-        else:
-            if instrument["token"] == token and instrument["exch_seg"] == exchange:
-                return instrument["symbol"]
+def fetch_current_price_bt():
+    global ltp
+    try:
+        ltp = float(intraday_data[gvars.i-1])
+    except Exception as err:
+        print(err)
+    return ltp
 
 class angleone:
     def __init__(self):
         self._instance = None
-        self.instrument_list = load_instrument_list()
-        self.ltp = None
-        self.error_msg = "NA"
+        self.cp = None
         self.__login()
 
     def __del__(self):
         self.__logout()
 
     def __login(self):
-        try:
-            time.sleep(delay)
-            self._instance = SmartConnect(API_KEY)
-            totp = TOTP(TOTP_TOKEN).now()
-            time.sleep(delay)
-            data = self._instance.generateSession(CLIENT_ID, PASSWORD, totp)
-            if data['status'] and data['message'] == 'SUCCESS':
-                self.refreshToken = data['data']['refreshToken']
-                print('Login success ... !')
-            else:
-                print('Login failed, ERROR: ', data['message'])
-                sys.exit(-1)
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-            sys.exit(-1)
+        print('Login success ... !')
 
     def __logout(self):
-        try:
-            time.sleep(delay)
-            data = self._instance.terminateSession(CLIENT_ID)
-            if data['status'] and data['message'] == 'SUCCESS':
-                print('Logout success ... !')
-            else:
-                print('Logout failed, ERROR: ', data['message'])
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-
-    def __get_hist_data(self, ticker, interval, fromdate, todate, exchange):
-        params = {
-            "exchange" : exchange,
-            "symboltoken" : token_lookup(ticker, self.instrument_list, exchange),
-            "interval" : interval,
-            "fromdate" : fromdate,
-            "todate" : todate
-                    }
-        try:
-            time.sleep(delay)
-            hist_data = self._instance.getCandleData(params)
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-        return hist_data
+        print('Logout success ... !')
 
     def hist_data_daily(self, ticker, duration, exchange, datestamp):
-        interval = "ONE_DAY"
-        fromdate = (datestamp - dt.timedelta(duration)).strftime('%Y-%m-%d %H:%M')
-        todate = dt.date.today().strftime('%Y-%m-%d %H:%M')
-        hist_data = self.__get_hist_data(ticker, interval, fromdate, todate, exchange)
-        df_data = pd.DataFrame(hist_data["data"],
-                               columns=["date", "Open", "High", "Low", "Close", "Volume"])
-        df_data.set_index("date", inplace=True)
-        df_data.index = pd.to_datetime(df_data.index)
-        df_data.index = df_data.index.tz_localize(None)
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=duration)
+        df_data = fetch_historical_data(ticker, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
         return df_data
 
     def hist_data_intraday(self, ticker, exchange, datestamp):
-        interval = 'FIVE_MINUTE'
-        fromdate = datestamp.strftime("%Y-%m-%d")+ " 09:15"
-        todate = datestamp.strftime("%Y-%m-%d") + " 15:30" 
-        hist_data = self.__get_hist_data(ticker, interval, fromdate, todate, exchange)
-        df_data = pd.DataFrame(hist_data["data"],
-                               columns=["date", "Open", "High", "Low", "Close", "Volume"])
-        df_data.set_index("date",inplace=True)
-        df_data.index = pd.to_datetime(df_data.index)
-        df_data.index = df_data.index.tz_localize(None)
+        df_data = fetch_intraday_data(ticker, datestamp)
         return df_data
 
     def get_current_price(self, ticker, exchange):
-        try:
-            time.sleep(delay)
-            data = self._instance.ltpData(exchange=exchange, tradingsymbol=ticker, symboltoken=token_lookup(ticker, self.instrument_list, exchange))
-            ltp = float(data['data']['ltp'])
-            self.ltp = ltp
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-            ltp = self.ltp
+        ltp = fetch_current_price(ticker)
+        print(f"Current Price is {ltp} ")
+        # ltp = float(input("Enter new Price:\n"))
+        self.cp = ltp
         return ltp
 
     def __place_order(self, ticker, quantity, buy_sell, exchange):
-        try:
-            params = {
-                "variety" : "NORMAL",
-                "tradingsymbol" : "{}".format(ticker),
-                "symboltoken" : token_lookup(ticker, self.instrument_list, exchange),
-                "transactiontype" : buy_sell,
-                "exchange" : exchange,
-                "ordertype" : "MARKET",
-                "producttype" : "DELIVERY",
-                "duration" : "DAY",
-                "quantity" : quantity
-            }
-
-            time.sleep(delay)
-            orderid = self._instance.placeOrder(params)
-            print("{} orderid: {} for {}".format(buy_sell, orderid, ticker))
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-
+        orderid = "TEST1"
+        print("{} orderid: {} for {}".format(buy_sell, orderid, ticker))
         return orderid
 
     def place_buy_order(self, ticker, quantity, exchange):
@@ -176,97 +104,23 @@ class angleone:
         return orderid
 
     def get_oder_status(self, orderid):
-        status = "NA"
-        try:
-            time.sleep(delay)
-            order_history_response = self._instance.orderBook()
-            for i in order_history_response['data']:
-                if i['orderid'] == orderid:
-                    status = i['status']  # complete/rejected/open/cancelled
-                    self.error_msg = i['text']
-                    break
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-        
+        status = 'complete'  # complete/rejected/open/cancelled 
         return status
 
     def get_user_data(self):
-        time.sleep(delay)
-        res = self._instance.getProfile(self.refreshToken)
+        res = "NA"
         return res
 
     def get_available_margin(self):
-        try:
-            time.sleep(delay)
-            res = self._instance.rmsLimit()
-            margin = float(res['data']['net'])
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
+        margin = 5000.00
         return margin
 
     def verify_position(self, ticker, quantity, exit_=False):
-        try:
-            time.sleep(delay)
-            res_positions = self._instance.position()
-            if res_positions['data'] is not None:
-                for i in res_positions['data']:
-                    if exit_:
-                        if i['tradingsymbol'] == ticker and int(i['sellqty']) == quantity:
-                            return True
-                    else:
-                        if i['tradingsymbol'] == ticker and int(i['buyqty']) == quantity:
-                            return True
-            else:
-                print("NO POSITIONS FOUND")
-
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-            return False
-        return False
+        return True
 
     def verify_holding(self, ticker, quantity):
-        try:
-            time.sleep(delay)
-            res_holdings = self._instance.holding() 
-            if res_holdings['data'] is not None:
-                for i in res_holdings['data']:    
-                    if i['tradingsymbol'] == ticker and int(i['quantity']) >= quantity:
-                        return True
-            else:
-                print("NO HOLDINGS FOUND")
-
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-            return False
-        return False
+        return True
 
     def get_entry_exit_price(self, ticker, _exit=False):
-        try:
-            time.sleep(delay)
-            res_positions = self._instance.position()
-            if res_positions['data'] is not None:
-                for i in res_positions['data']:
-                    if i['tradingsymbol'] == ticker:
-                        if _exit:
-                            price = float(i['sellavgprice'])
-                        else:
-                            price = float(i['buyavgprice'])
-            else:
-                print("NO POSITIONS FOUND")
-                return None
-
-        except Exception as err:
-            template = "An exception of type {0} occurred. error message:{1!r}"
-            message = template.format(type(err).__name__, err.args)
-            print("{}".format(message))
-            return None
-
+        price = self.cp
         return price

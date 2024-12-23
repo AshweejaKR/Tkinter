@@ -1,124 +1,102 @@
-from tkinter import *
-from tkinter import messagebox
-from tkinter import simpledialog
-from tkinter import filedialog
-import os
-import socket
-from PIL import Image, ImageTk
+from angleone_broker import *
+import time
 
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+def main():
+    print("Hello")
+    start = time.time()
+    print("T0 : {}".format(start))
+    obj = angleone()
 
-username = os.getenv("USERNAME") 
-hostname = socket.gethostname()
+    user_data = obj.get_user_data()
+    print("user data : ", user_data)
+    print("---------------------------------------------------------\n")
 
-print("Current username: {}".format(username)) 
-print("Current hostname: {}".format(hostname))
+    user_amt = obj.get_available_margin()
+    print("available margin : ", user_amt)
+    print("---------------------------------------------------------\n")
 
-contactlist = []
-Name = None
+    exchange = "NSE"
+    stock = "INFY-EQ"
+    datestamp=dt.date.today()
+    duration = 10
 
-user = None
-host = None
-port = None
-image_extension = None
-image_path = None
-profile_label = None
+    current_price = obj.get_current_price(stock, exchange)
+    print("current_price : ", current_price)
+    print("---------------------------------------------------------\n")
 
-def add_photo():
-    global profile_label
-    print("adding photo ...")
-    image_path = filedialog.askopenfilename()
-    image_name = os.path.basename(image_path)
-    image_extension = image_name[image_name.rfind('.')+1:]
+    data1 = obj.hist_data_daily(stock, duration, exchange, datestamp)
+    print("data1 : ", data1)
+    print("---------------------------------------------------------\n")
 
-    if image_path:
-        user_image = Image.open(image_path)
-        user_image = user_image.resize((150, 140), Image.ANTIALIAS)
-        user_image.save('resized' + image_name)
-        user_image.close()
+    data2 = obj.hist_data_intraday(stock, exchange, datestamp)
+    print("data2 : ", data2)
+    print("---------------------------------------------------------\n")
 
-        image_path = 'resized' + image_name
-        user_image = Image.open(image_path)
+    quantity = 1
+    oid = obj.place_buy_order(stock, quantity, exchange)
+    print("Order ID : ", oid)
+    print("---------------------------------------------------------\n")
 
-        user_image = ImageTk.PhotoImage(user_image)
-        profile_label.image = user_image
-        profile_label.config(image = user_image)
+    status = obj.get_oder_status(oid)
+    print("Order status : ", status)
+    print("Order status error : ", obj.error_msg)
+    print("---------------------------------------------------------\n")
 
-def process_data():
-    global username_entry, host_address_entry, port_number_entry
-    print("processing data ...")
+    oid = obj.place_sell_order(stock, quantity, exchange)
+    print("Order ID : ", oid)
+    print("---------------------------------------------------------\n")
 
-    user = username_entry.get()
-    host = host_address_entry.get()
-    port = port_number_entry.get()
+    status = obj.get_oder_status(oid)
+    print("Order status : ", status)
+    print("Order status error : ", obj.error_msg)
+    print("---------------------------------------------------------\n")
 
-def get_userip(title, prompt):
-    pass
+    exchange = "NSE"
+    stock = "INFY-EQ"
+    quantity = 1
+    status = obj.verify_position(stock, quantity)
+    print("Position status : ", status)
+    print("---------------------------------------------------------\n")
 
-def InitScreen(root):
-    global username_entry, host_address_entry, port_number_entry
-    global profile_label
-    screen_width, screen_height = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.x_co = int((screen_width / 2) - (550 / 2))
-    root.y_co = int((screen_height / 2) - (400 / 2)) - 80
-    root.geometry(f"550x400+{root.x_co}+{root.y_co}")
+    status = obj.verify_position(stock, quantity, True)
+    print("Position status : ", status)
+    print("---------------------------------------------------------\n")
 
-    first_frame = Frame(root, bg = "sky blue")
-    first_frame.pack(fill = "both", expand = True)
+    status = obj.verify_holding(stock, quantity)
+    print("holding status : ", status)
+    print("---------------------------------------------------------\n")
 
-    app_icon = Image.open('images/chat_ca.png')
-    app_icon = ImageTk.PhotoImage(app_icon)
+    stock = "NIFTYBEES-EQ"
+    quantity = 60
+    status = obj.verify_position(stock, quantity)
+    print("Position status : ", status)
+    print("---------------------------------------------------------\n")
 
-    root.iconphoto(False, app_icon)
+    status = obj.verify_position(stock, quantity, True)
+    print("Position status : ", status)
+    print("---------------------------------------------------------\n")
 
-    background = Image.open("images/login_bg_ca.jpg")
-    background = background.resize((550, 400), Image.ANTIALIAS)
-    background = ImageTk.PhotoImage(background)
+    status = obj.verify_holding(stock, quantity)
+    print("holding status : ", status)
+    print("---------------------------------------------------------\n")
 
-    upload_image = Image.open('images/upload_ca.png')
-    upload_image = upload_image.resize((25, 25), Image.ANTIALIAS)
-    upload_image = ImageTk.PhotoImage(upload_image)
+    stock = "INFY-EQ"
+    price = obj.get_entry_exit_price(stock)
+    print("Entry Price : ", price)
+    print("---------------------------------------------------------\n")
 
-    user_image = 'images/user.png'
+    price = obj.get_entry_exit_price(stock, True)
+    print("Exit Price : ", price)
+    print("---------------------------------------------------------\n")
 
-    Label(first_frame, image = background).place(x = 0, y = 0)
+    del obj
+    #######################################################################
 
-    head = Label(first_frame, text = "Sign Up", font = "lucida 17 bold", bg = "grey")
-    head.place(relwidth = 1, y = 24)
+    print("Done ...")
+    end = time.time()
+    print("T1 : {}".format(end))
+    diff = end - start
+    print("T: {} \n".format(time.strftime('%H:%M:%S', time.gmtime(diff))))
 
-    profile_label = Label(first_frame, bg = "grey")
-    profile_label.place(x = 350, y = 75, width = 150, height = 140)
-
-    upload_button = Button(first_frame, image = upload_image, compound = "left", text = "Upload Image", cursor = "hand2", font = "lucida 12 bold", padx = 2, command = add_photo)
-    upload_button.place(x = 345, y = 220)
-
-    username = Label(first_frame, text = "Username", font = "lucida 12 bold", bg = "grey")
-    username.place(x = 50, y = 75)
-    username_entry = Entry(first_frame,  font = "lucida 12 bold", width = 10, highlightcolor = "blue", highlightthickness = 1)
-    username_entry.place(x = 195, y = 75)
-    username_entry.focus_set()
-
-    host_address = Label(first_frame, text = "host address", font = "lucida 12 bold", bg = "grey")
-    host_address.place(x = 50, y = 115)
-    host_address_entry = Entry(first_frame,  font = "lucida 12 bold", width = 10, highlightcolor = "blue", highlightthickness = 1)
-    host_address_entry.place(x = 195, y = 115)
-    host_address_entry.focus_set()
-
-    port_number = Label(first_frame, text = "port number", font = "lucida 12 bold", bg = "grey")
-    port_number.place(x = 50, y = 155)
-    port_number_entry = Entry(first_frame,  font = "lucida 12 bold", width = 10, highlightcolor = "blue", highlightthickness = 1)
-    port_number_entry.place(x = 195, y = 155)
-    port_number_entry.focus_set()
-
-    submit_button = Button(first_frame, text = "Connect", font = "lucida 12 bold", padx = 30, cursor = "hand2", command = process_data, bg = "#16cade", relief = "solid", bd = 2)
-    submit_button.place(x = 200, y = 275)
-
-    #mainloop
-    root.mainloop()
-
-root = Tk()
-root.config(bg = '#d3f3f5')
-InitScreen(root)
-
-print("Done !")
+if __name__ == "__main__":
+    main()
